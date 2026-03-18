@@ -9,7 +9,8 @@ import axios from "axios";
 
 const api = axios.create({
   
-baseURL: import.meta.env.VITE_API_URL || "https://letschats-1.onrender.com/api",
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || "https://letschats-shw9.onrender.com/api",
   headers: { "Content-Type": "application/json" },
 });
 
