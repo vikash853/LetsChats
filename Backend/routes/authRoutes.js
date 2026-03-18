@@ -1,13 +1,13 @@
-const express  = require("express");
-const router   = express.Router();
-const protect = require("../middleware/auth");
+const express = require("express");
+const router  = express.Router();
+const protect = require("../middleware/auth");  // exact file naam
 const {
   register, login, firebaseLogin, getMe, updateProfile,
-} = require("../Controllers/authController");
+} = require("../controllers/authController");  // lowercase 'controllers'
 
 router.post("/register",       register);
 router.post("/login",          login);
-router.post("/firebase-login", firebaseLogin);  // NEW
+router.post("/firebase-login", firebaseLogin);
 router.get("/me",              protect, getMe);
 router.put("/profile",         protect, updateProfile);
 
