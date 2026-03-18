@@ -5,7 +5,6 @@ const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// ── Request interceptor: attach token ──────────────────────────
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
@@ -15,7 +14,6 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// ── Response interceptor: handle 401 globally ─────────────────
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -28,23 +26,21 @@ api.interceptors.response.use(
   }
 );
 
-// ── Auth endpoints ─────────────────────────────────────────────
 export const authAPI = {
   register:      (data) => api.post("/auth/register", data),
   login:         (data) => api.post("/auth/login", data),
+  firebaseLogin: (data) => api.post("/auth/firebase-login", data), // NEW
   getMe:         ()     => api.get("/auth/me"),
   updateProfile: (data) => api.put("/auth/profile", data),
   logout:        ()     => api.post("/auth/logout"),
 };
 
-// ── User endpoints ─────────────────────────────────────────────
 export const usersAPI = {
   getAll:    (search = "") => api.get("/users?search=" + search),
   getOnline: ()            => api.get("/users/online"),
   getById:   (id)          => api.get("/users/" + id),
 };
 
-// ── Conversation endpoints ─────────────────────────────────────
 export const conversationsAPI = {
   getAll:         ()         => api.get("/conversations"),
   accessOrCreate: (userId)   => api.post("/conversations", { userId }),
@@ -52,7 +48,6 @@ export const conversationsAPI = {
   updateGroup:    (id, data) => api.put("/conversations/group/" + id, data),
 };
 
-// ── Message endpoints ──────────────────────────────────────────
 export const messagesAPI = {
   getByConversation: (conversationId, page = 1) =>
     api.get("/messages/" + conversationId + "?page=" + page),
@@ -61,10 +56,9 @@ export const messagesAPI = {
   delete:   (id)   => api.delete("/messages/" + id),
 };
 
-// ── Upload endpoints ───────────────────────────────────────────
 export const uploadAPI = {
-  avatar:     (formData) => api.post("/upload/avatar",     formData, { headers: { "Content-Type": "multipart/form-data" } }),
-  attachment: (formData) => api.post("/upload/attachment", formData, { headers: { "Content-Type": "multipart/form-data" } }),
+  avatar:     (fd) => api.post("/upload/avatar",     fd, { headers: { "Content-Type": "multipart/form-data" } }),
+  attachment: (fd) => api.post("/upload/attachment", fd, { headers: { "Content-Type": "multipart/form-data" } }),
 };
 
 export default api;
