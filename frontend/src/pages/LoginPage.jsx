@@ -4,9 +4,9 @@ import {
   RecaptchaVerifier, signInWithPhoneNumber,
   GoogleAuthProvider, signInWithPopup,
 } from "firebase/auth";
-import { auth } from "../../services/firebaseConfig";
-import { authAPI } from "../../services/api";
-import { useAuth } from "../../context/AuthContext";
+import { auth } from "../services/firebaseConfig";
+import { authAPI } from "../services/api";
+import { useAuth } from "../context/AuthContext";
 
 export default function LoginPage() {
   const navigate  = useNavigate();
