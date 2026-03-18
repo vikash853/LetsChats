@@ -1,14 +1,5 @@
-/**
- * API Service (Axios)
- * ─────────────────────────────────────────────────────────────────
- * Single source of truth for all HTTP requests.
- * - Automatically attaches the JWT from localStorage to every request
- * - On 401 response: clears auth data and redirects to /login
- */
 import axios from "axios";
 
-const api = axios.create({
-  
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "https://letschats-shw9.onrender.com/api",
   headers: { "Content-Type": "application/json" },
@@ -55,10 +46,10 @@ export const usersAPI = {
 
 // ── Conversation endpoints ─────────────────────────────────────
 export const conversationsAPI = {
-  getAll:        ()           => api.get("/conversations"),
-  accessOrCreate:(userId)     => api.post("/conversations", { userId }),
-  createGroup:   (data)       => api.post("/conversations/group", data),
-  updateGroup:   (id, data)   => api.put("/conversations/group/" + id, data),
+  getAll:         ()         => api.get("/conversations"),
+  accessOrCreate: (userId)   => api.post("/conversations", { userId }),
+  createGroup:    (data)     => api.post("/conversations/group", data),
+  updateGroup:    (id, data) => api.put("/conversations/group/" + id, data),
 };
 
 // ── Message endpoints ──────────────────────────────────────────
