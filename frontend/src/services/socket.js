@@ -23,12 +23,12 @@ export const connectSocket = (token) => {
   // Already connected — reuse the existing socket
   if (socket?.connected) return socket;
 
-  socket = io(SOCKET_URL, {
-    auth: { token },                           // Sent to server middleware for JWT verify
-    transports: ["websocket", "polling"],      // Try WebSocket first, fall back to polling
-    reconnectionAttempts: 5,                   // Retry up to 5 times on disconnect
-    reconnectionDelay: 1000,                   // Wait 1s between retries
-  });
+ socket = io(SOCKET_URL, {
+  auth: { token },
+  transports: ["polling", "websocket"], // polling pehle, websocket baad mein
+  reconnectionAttempts: 5,
+  reconnectionDelay: 1000,
+});
 
   socket.on("connect", () => {
     console.log("✅ Socket connected:", socket.id);
