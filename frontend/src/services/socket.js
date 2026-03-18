@@ -11,7 +11,7 @@
  */
 import { io } from "socket.io-client";
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "https://letschats-1.onrender.com";
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "https://letschats-shw9.onrender.com";
 
 let socket = null;
 
