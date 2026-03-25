@@ -1,112 +1,102 @@
-const User     = require("../models/User");
-const jwt      = require("jsonwebtoken");
-const bcrypt   = require("bcryptjs");
-const admin    = require("../config/firebaseAdmin"); // Firebase Admin SDK
+const User    = require("../models/User");
+const jwt     = require("jsonwebtoken");
+const bcrypt  = require("bcryptjs");
 
-// ── Generate JWT ──────────────────────────────────────────────
 const generateToken = (id) =>
   jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRE || "7d" });
 
-// ── Register ──────────────────────────────────────────────────
+// ── Register (called after OTP/Google verification on frontend) ──
 exports.register = async (req, res, next) => {
   try {
-    const { username, email, password } = req.body;
-    if (!username || !email || !password)
-      return res.status(400).json({ success: false, message: "All fields required" });
+    const { username, email, password, phone, firebaseUID, authMethod, verified } = req.body;
 
-    if (await User.findOne({ email }))
-      return res.status(400).json({ success: false, message: "Email already registered" });
+    if (!username || !username.trim())
+      return res.status(400).json({ success:false, message:"Username is required" });
+    if (!password || password.length < 6)
+      return res.status(400).json({ success:false, message:"Password must be at least 6 characters" });
+
+    // Check duplicate email
+    if (email) {
+      const exists = await User.findOne({ email });
+      if (exists)
+        return res.status(400).json({ success:false, message:"Email already registered. Please sign in." });
+    }
+
+    // Check duplicate phone
+    if (phone) {
+      const exists = await User.findOne({ phone });
+      if (exists)
+        return res.status(400).json({ success:false, message:"Phone already registered. Please sign in." });
+    }
 
     const hashed = await bcrypt.hash(password, 12);
-    const user   = await User.create({ username, email, password: hashed });
-    res.status(201).json({ success: true, token: generateToken(user._id), user: user.toSafeObject() });
+
+    const user = await User.create({
+      username:    username.trim(),
+      email:       email || undefined,
+      phone:       phone || undefined,
+      password:    hashed,
+      firebaseUID: firebaseUID || undefined,
+      authMethod:  authMethod || "email",
+      isVerified:  verified === true,
+    });
+
+    res.status(201).json({
+      success: true,
+      token:   generateToken(user._id),
+      user:    user.toSafeObject(),
+    });
   } catch (err) { next(err); }
 };
 
-// ── Login ─────────────────────────────────────────────────────
+// ── Login (simple email + password, no OTP needed) ──────────────
 exports.login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
+    if (!email || !password)
+      return res.status(400).json({ success:false, message:"Email and password are required" });
+
     const user = await User.findOne({ email }).select("+password");
-    if (!user || !(await bcrypt.compare(password, user.password)))
-      return res.status(401).json({ success: false, message: "Invalid credentials" });
+    if (!user)
+      return res.status(401).json({ success:false, message:"No account found with this email" });
 
-    user.lastSeen = new Date();
-    await user.save();
-    res.json({ success: true, token: generateToken(user._id), user: user.toSafeObject() });
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch)
+      return res.status(401).json({ success:false, message:"Incorrect password" });
+
+    // Update lastSeen without triggering full validation
+    await User.findByIdAndUpdate(user._id, { lastSeen: new Date() });
+
+    res.json({
+      success: true,
+      token:   generateToken(user._id),
+      user:    user.toSafeObject(),
+    });
   } catch (err) { next(err); }
 };
 
-// ── Firebase Login (Phone OTP + Google OAuth) ─────────────────
-// Frontend sends: { firebaseUID, method: "phone"|"google", phone?, email?, name?, photo? }
-exports.firebaseLogin = async (req, res, next) => {
-  try {
-    const { firebaseUID, method, phone, email, name, photo } = req.body;
-
-    if (!firebaseUID || !method)
-      return res.status(400).json({ success: false, message: "Missing firebaseUID or method" });
-
-    // Verify token with Firebase Admin (optional but recommended for security)
-    // const decoded = await admin.auth().getUser(firebaseUID);
-
-    let user;
-
-    if (method === "phone") {
-      // Find by phone or firebaseUID
-      user = await User.findOne({ $or: [{ phone }, { firebaseUID }] });
-      if (!user) {
-        // Auto-create account for new phone users
-        user = await User.create({
-          username:   "User_" + phone.slice(-4),
-          phone,
-          firebaseUID,
-          authMethod: "phone",
-          password:   await bcrypt.hash(Math.random().toString(36), 10),
-        });
-      }
-    } else if (method === "google") {
-      // Find by email or firebaseUID
-      user = await User.findOne({ $or: [{ email }, { firebaseUID }] });
-      if (!user) {
-        // Auto-create account for new Google users
-        user = await User.create({
-          username:   name || email.split("@")[0],
-          email,
-          firebaseUID,
-          authMethod: "google",
-          avatar:     photo,
-          password:   await bcrypt.hash(Math.random().toString(36), 10),
-        });
-      } else {
-        // Update avatar if changed
-        if (photo && !user.avatar) { user.avatar = photo; await user.save(); }
-      }
-    } else {
-      return res.status(400).json({ success: false, message: "Invalid method" });
-    }
-
-    user.lastSeen = new Date();
-    await user.save();
-
-    res.json({ success: true, token: generateToken(user._id), user: user.toSafeObject() });
-  } catch (err) { next(err); }
-};
-
-// ── Get Me ────────────────────────────────────────────────────
+// ── Get current user ─────────────────────────────────────────────
 exports.getMe = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id);
-    res.json({ success: true, user: user.toSafeObject() });
+    if (!user)
+      return res.status(404).json({ success:false, message:"User not found" });
+    res.json({ success:true, user: user.toSafeObject() });
   } catch (err) { next(err); }
 };
 
-// ── Update Profile ────────────────────────────────────────────
+// ── Update profile ───────────────────────────────────────────────
 exports.updateProfile = async (req, res, next) => {
   try {
     const { username, bio, avatar } = req.body;
-    const user = await User.findByIdAndUpdate(
-      req.user.id, { username, bio, avatar }, { new: true, runValidators: true }
-    );
-    res.json({ success: true, user: user.toSafeObject() });
+    const updates = {};
+    if (username) updates.username = username.trim();
+    if (bio !== undefined) updates.bio = bio;
+    if (avatar) updates.avatar = avatar;
+
+    const user = await User.findByIdAndUpdate(req.user.id, updates, {
+      new: true, runValidators: false,
+    });
+    res.json({ success:true, user: user.toSafeObject() });
   } catch (err) { next(err); }
 };
