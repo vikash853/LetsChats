@@ -1,12 +1,3 @@
-/**
- * AuthContext
- * ─────────────────────────────────────────────────────────────────
- * Provides:  user, loading, login(), register(), logout(), updateUser()
- *
- * On mount it re-validates the stored token against /api/auth/me.
- * If valid → rehydrates user + connects socket.
- * If invalid → clears storage.
- */
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { authAPI } from "../services/api";
 import { connectSocket, disconnectSocket } from "../services/socket";
@@ -14,7 +5,7 @@ import { connectSocket, disconnectSocket } from "../services/socket";
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser]       = useState(() => {
+  const [user,    setUser]    = useState(() => {
     try { return JSON.parse(localStorage.getItem("user")); }
     catch { return null; }
   });
@@ -24,7 +15,6 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) { setLoading(false); return; }
-
     authAPI.getMe()
       .then(({ data }) => {
         setUser(data.user);
@@ -38,8 +28,22 @@ export const AuthProvider = ({ children }) => {
       .finally(() => setLoading(false));
   }, []);
 
-  // ── Login ────────────────────────────────────────────────────
-  const login = useCallback(async (email, password) => {
+  // ── Login — accepts (token, user) from LoginPage/RegisterPage ─
+  // Also supports old usage login(email, password) for compatibility
+  const login = useCallback(async (tokenOrEmail, userOrPassword) => {
+    // New usage: login(token, userObject)
+    if (typeof userOrPassword === "object" && userOrPassword !== null) {
+      const token = tokenOrEmail;
+      const userData = userOrPassword;
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(userData));
+      setUser(userData);
+      connectSocket(token);
+      return { token, user: userData };
+    }
+    // Old usage: login(email, password) — still works
+    const email    = tokenOrEmail;
+    const password = userOrPassword;
     const { data } = await authAPI.login({ email, password });
     localStorage.setItem("token", data.token);
     localStorage.setItem("user", JSON.stringify(data.user));
@@ -67,7 +71,7 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   }, []);
 
-  // ── Update local user data (e.g. after profile edit) ─────────
+  // ── Update local user ─────────────────────────────────────────
   const updateUser = useCallback((patch) => {
     setUser((prev) => {
       const next = { ...prev, ...patch };
