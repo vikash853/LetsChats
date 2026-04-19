@@ -43,6 +43,7 @@ app.use("/api/users",         userRoutes);
 app.use("/api/conversations", conversationRoutes);
 app.use("/api/messages",      messageRoutes);
 app.use("/api/upload",        uploadRoutes);
+app.use("/api/auth", require("./routes/authRoutes"));
 
 app.get("/api/health", (req, res) => {
   res.json({ status: "OK", message: "ChatApp API is running" });
