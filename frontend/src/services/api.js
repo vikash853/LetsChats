@@ -27,7 +27,7 @@ api.interceptors.response.use(
 );
 
 export const authAPI = {
-  register:      (data) => api.post("/auth/register", data),
+  register: (data) => api.post("/auth/register", data),
   login:         (data) => api.post("/auth/login", data),
   firebaseLogin: (data) => api.post("/auth/firebase-login", data), // NEW
   getMe:         ()     => api.get("/auth/me"),
