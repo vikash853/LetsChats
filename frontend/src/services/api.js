@@ -27,12 +27,12 @@ api.interceptors.response.use(
 );
 
 export const authAPI = {
-  register: (data) => api.post("/auth/register", data),
-  login:         (data) => api.post("/auth/login", data),
-  firebaseLogin: (data) => api.post("/auth/firebase-login", data), // NEW
-  getMe:         ()     => api.get("/auth/me"),
-  updateProfile: (data) => api.put("/auth/profile", data),
-  logout:        ()     => api.post("/auth/logout"),
+  register:     (data)  => api.post("/auth/register", data),
+  verifyEmail:  (token) => api.get(`/auth/verify-email?token=${token}`),
+  login:        (data)  => api.post("/auth/login", data),
+  getMe:        ()      => api.get("/auth/me"),
+  updateProfile:(data)  => api.put("/auth/profile", data),
+  logout:       ()      => api.post("/auth/logout"),
 };
 
 export const usersAPI = {
