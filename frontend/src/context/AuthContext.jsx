@@ -1,12 +1,3 @@
-/**
- * AuthContext
- * ─────────────────────────────────────────────────────────────────
- * Provides:  user, loading, login(), register(), logout(), updateUser()
- *
- * On mount it re-validates the stored token against /api/auth/me.
- * If valid → rehydrates user + connects socket.
- * If invalid → clears storage.
- */
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { authAPI } from "../services/api";
 import { connectSocket, disconnectSocket } from "../services/socket";
@@ -14,22 +5,18 @@ import { connectSocket, disconnectSocket } from "../services/socket";
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser]       = useState(() => {
+  const [user,    setUser]    = useState(() => {
     try { return JSON.parse(localStorage.getItem("user")); }
     catch { return null; }
   });
   const [loading, setLoading] = useState(true);
 
-  // ── Verify token on app startup ──────────────────────────────
+  // Verify token on startup
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) { setLoading(false); return; }
-
     authAPI.getMe()
-      .then(({ data }) => {
-        setUser(data.user);
-        connectSocket(token);
-      })
+      .then(({ data }) => { setUser(data.user); connectSocket(token); })
       .catch(() => {
         localStorage.removeItem("token");
         localStorage.removeItem("user");
@@ -38,27 +25,14 @@ export const AuthProvider = ({ children }) => {
       .finally(() => setLoading(false));
   }, []);
 
-  // ── Login ────────────────────────────────────────────────────
-  const login = useCallback(async (email, password) => {
-    const { data } = await authAPI.login({ email, password });
-    localStorage.setItem("token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.user));
-    setUser(data.user);
-    connectSocket(data.token);
-    return data;
+  // login(token, userObject) — called from LoginPage/RegisterPage
+  const login = useCallback((token, userData) => {
+    localStorage.setItem("token", token);
+    localStorage.setItem("user", JSON.stringify(userData));
+    setUser(userData);
+    connectSocket(token);
   }, []);
 
-  // ── Register ─────────────────────────────────────────────────
-  const register = useCallback(async (username, email, password) => {
-    const { data } = await authAPI.register({ username, email, password });
-    localStorage.setItem("token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.user));
-    setUser(data.user);
-    connectSocket(data.token);
-    return data;
-  }, []);
-
-  // ── Logout ───────────────────────────────────────────────────
   const logout = useCallback(async () => {
     try { await authAPI.logout(); } catch (_) {}
     disconnectSocket();
@@ -67,7 +41,6 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   }, []);
 
-  // ── Update local user data (e.g. after profile edit) ─────────
   const updateUser = useCallback((patch) => {
     setUser((prev) => {
       const next = { ...prev, ...patch };
@@ -77,7 +50,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );
