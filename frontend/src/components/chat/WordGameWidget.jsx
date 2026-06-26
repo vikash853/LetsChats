@@ -1,176 +1,139 @@
-/**
- * WordGameWidget — Play a word guessing game inside the chat!
- * Send a game challenge to the other person.
- * Nobody has inline mini-games in a chat app.
- */
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useChat } from "../../context/ChatContext";
 
-const WORDS = [
-  "REACT", "SOCKET", "MONGO", "NODE", "VITE",
-  "CHAT", "CODE", "BUILD", "DEPLOY", "SERVER",
-  "LOGIN", "TOKEN", "CLOUD", "DEBUG", "FETCH",
-  "PROXY", "STYLE", "ROUTE", "STORE", "QUEUE",
+const WIN_LINES = [
+  [0,1,2],[3,4,5],[6,7,8],
+  [0,3,6],[1,4,7],[2,5,8],
+  [0,4,8],[2,4,6],
 ];
 
-const MAX_GUESSES = 6;
-
-const getRandomWord = () => WORDS[Math.floor(Math.random() * WORDS.length)];
-
-const LetterBox = ({ letter, status }) => {
-  const colors = {
-    correct: "bg-emerald-500 text-white border-emerald-500",
-    present: "bg-amber-400 text-white border-amber-400",
-    absent:  "bg-slate-400 dark:bg-slate-600 text-white border-slate-400",
-    empty:   "bg-transparent border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100",
-    active:  "bg-transparent border-slate-500 dark:border-slate-400 text-slate-900 dark:text-slate-100",
-  };
-  return (
-    <div className={`w-11 h-11 border-2 rounded-lg flex items-center justify-center font-bold text-sm uppercase transition-all ${colors[status || "empty"]}`}>
-      {letter}
-    </div>
-  );
+const checkWinner = (board) => {
+  for (const [a,b,c] of WIN_LINES) {
+    if (board[a] && board[a] === board[b] && board[a] === board[c])
+      return { winner: board[a], line: [a,b,c] };
+  }
+  return null;
 };
 
-const WordGameWidget = ({ onClose }) => {
+const EMPTY = Array(9).fill(null);
+
+export default function WordGameWidget({ onClose }) {
   const { sendMessage } = useChat();
-  const [word]     = useState(getRandomWord);
-  const [guesses,  setGuesses]  = useState([]);
-  const [current,  setCurrent]  = useState("");
-  const [gameOver, setGameOver] = useState(false);
-  const [won,      setWon]      = useState(false);
-  const [shared,   setShared]   = useState(false);
+  const [board,  setBoard]  = useState(EMPTY);
+  const [turn,   setTurn]   = useState("X");
+  const [shared, setShared] = useState(false);
+  const [scores, setScores] = useState({ X: 0, O: 0 });
 
-  const getLetterStatuses = (guess) => {
-    return guess.split("").map((letter, i) => {
-      if (word[i] === letter) return "correct";
-      if (word.includes(letter)) return "present";
-      return "absent";
-    });
-  };
+  const result   = checkWinner(board);
+  const winner   = result?.winner;
+  const winLine  = result?.line || [];
+  const isDraw   = !winner && board.every(Boolean);
+  const gameOver = winner || isDraw;
 
-  const handleKey = (key) => {
-    if (gameOver) return;
-    if (key === "ENTER") {
-      if (current.length !== 5) return;
-      const newGuesses = [...guesses, current];
-      setGuesses(newGuesses);
-      if (current === word) { setWon(true); setGameOver(true); }
-      else if (newGuesses.length >= MAX_GUESSES) { setGameOver(true); }
-      setCurrent("");
-    } else if (key === "⌫") {
-      setCurrent((c) => c.slice(0, -1));
-    } else if (current.length < 5 && /^[A-Z]$/.test(key)) {
-      setCurrent((c) => c + key);
-    }
-  };
+  const handleClick = useCallback((i) => {
+    if (board[i] || gameOver) return;
+    const next = [...board];
+    next[i] = turn;
+    const res = checkWinner(next);
+    if (res) setScores(s => ({ ...s, [res.winner]: s[res.winner] + 1 }));
+    setBoard(next);
+    setTurn(t => t === "X" ? "O" : "X");
+  }, [board, turn, gameOver]);
+
+  const reset = () => { setBoard(EMPTY); setTurn("X"); setShared(false); };
 
   const shareResult = async () => {
-    const emoji = guesses.map((g) =>
-      getLetterStatuses(g).map((s) =>
-        s === "correct" ? "🟩" : s === "present" ? "🟨" : "⬛"
-      ).join("")
-    ).join("\n");
-    const result = `🎯 Word Game in ChatApp!\n${won ? `Solved in ${guesses.length}/${MAX_GUESSES}` : "Failed 😢"}\n\n${emoji}`;
-    await sendMessage(result, "text");
+    const emoji = board.map(v => v === "X" ? "❌" : v === "O" ? "⭕" : "⬜");
+    const grid  = [
+      emoji.slice(0,3).join(""),
+      emoji.slice(3,6).join(""),
+      emoji.slice(6,9).join(""),
+    ].join("\n");
+    const msg = winner
+      ? `🎮 Tic Tac Toe — ${winner === "X" ? "❌" : "⭕"} wins!\n\n${grid}`
+      : `🎮 Tic Tac Toe — It's a draw!\n\n${grid}`;
+    await sendMessage(msg, "text");
     setShared(true);
     setTimeout(onClose, 800);
   };
 
-  const KEYBOARD = [
-    ["Q","W","E","R","T","Y","U","I","O","P"],
-    ["A","S","D","F","G","H","J","K","L"],
-    ["ENTER","Z","X","C","V","B","N","M","⌫"],
-  ];
-
-  // Get letter status for keyboard coloring
-  const letterStatuses = {};
-  guesses.forEach((g) => {
-    getLetterStatuses(g).forEach((status, i) => {
-      const l = g[i];
-      if (!letterStatuses[l] || status === "correct") letterStatuses[l] = status;
-    });
-  });
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.7)" }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="w-full max-w-sm bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 animate-slide-up overflow-hidden">
-
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-700">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">🎯</span>
-            <h3 className="font-bold text-slate-900 dark:text-slate-100">Word Game</h3>
+    <div style={S.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={S.modal}>
+        <div style={S.header}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:24}}>🎮</span>
+            <div>
+              <h3 style={S.title}>Tic Tac Toe</h3>
+              <p style={S.sub}>2 players · same device</p>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400">{guesses.length}/{MAX_GUESSES}</span>
-            <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
-              </svg>
-            </button>
+          <button onClick={onClose} style={S.closeBtn}>✕</button>
+        </div>
+
+        <div style={S.scores}>
+          <div style={{...S.scoreBox,...(turn==="X"&&!gameOver?S.scoreActive:{})}}>
+            <span style={{fontSize:22}}>❌</span>
+            <span style={S.scoreNum}>{scores.X}</span>
+            <span style={S.scoreLabel}>Player X</span>
+          </div>
+          <div style={S.vs}>VS</div>
+          <div style={{...S.scoreBox,...(turn==="O"&&!gameOver?S.scoreActive:{})}}>
+            <span style={{fontSize:22}}>⭕</span>
+            <span style={S.scoreNum}>{scores.O}</span>
+            <span style={S.scoreLabel}>Player O</span>
           </div>
         </div>
 
-        <div className="p-4">
-          {/* Grid */}
-          <div className="flex flex-col gap-1.5 mb-4 items-center">
-            {Array.from({ length: MAX_GUESSES }).map((_, rowIdx) => {
-              const guess    = guesses[rowIdx];
-              const isActive = rowIdx === guesses.length && !gameOver;
-              const statuses = guess ? getLetterStatuses(guess) : null;
-              const letters  = isActive ? current.padEnd(5, " ").split("") : (guess ? guess.split("") : Array(5).fill(""));
-              return (
-                <div key={rowIdx} className="flex gap-1.5">
-                  {letters.map((l, i) => (
-                    <LetterBox key={i} letter={l.trim()} status={
-                      statuses ? statuses[i] : isActive && l.trim() ? "active" : "empty"
-                    } />
-                  ))}
-                </div>
-              );
-            })}
-          </div>
+        <div style={S.status}>
+          {gameOver
+            ? winner
+              ? <span style={{color:winner==="X"?"#6366f1":"#a855f7",fontWeight:700}}>{winner==="X"?"❌":"⭕"} Player {winner} wins! 🎉</span>
+              : <span style={{color:"#f59e0b",fontWeight:700}}>It's a draw! 🤝</span>
+            : <span>Turn: <strong style={{color:turn==="X"?"#6366f1":"#a855f7"}}>{turn==="X"?"❌ X":"⭕ O"}</strong></span>
+          }
+        </div>
 
-          {/* Game over state */}
+        <div style={S.board}>
+          {board.map((cell,i) => (
+            <button key={i} onClick={() => handleClick(i)}
+              style={{...S.cell,...(winLine.includes(i)?S.cellWin:{}),cursor:cell||gameOver?"default":"pointer",fontSize:cell?32:14}}>
+              {cell==="X"?"❌":cell==="O"?"⭕":""}
+            </button>
+          ))}
+        </div>
+
+        <div style={S.actions}>
+          <button onClick={reset} style={S.resetBtn}>🔄 New Game</button>
           {gameOver && (
-            <div className={`text-center py-3 px-4 rounded-xl mb-3 ${won ? "bg-emerald-50 dark:bg-emerald-500/10" : "bg-red-50 dark:bg-red-500/10"}`}>
-              <p className={`font-bold text-sm ${won ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>
-                {won ? `🎉 You got it in ${guesses.length}!` : `😢 The word was ${word}`}
-              </p>
-              <button onClick={shareResult} disabled={shared}
-                className="mt-2 px-4 py-1.5 bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50">
-                {shared ? "Shared! ✓" : "📤 Share result in chat"}
-              </button>
-            </div>
+            <button onClick={shareResult} disabled={shared} style={S.shareBtn}>
+              {shared?"Shared! ✓":"📤 Share result"}
+            </button>
           )}
-
-          {/* Keyboard */}
-          <div className="flex flex-col gap-1">
-            {KEYBOARD.map((row, ri) => (
-              <div key={ri} className="flex justify-center gap-1">
-                {row.map((key) => {
-                  const status = letterStatuses[key];
-                  const isWide = key === "ENTER" || key === "⌫";
-                  const bgColor = status === "correct" ? "bg-emerald-500 text-white"
-                    : status === "present" ? "bg-amber-400 text-white"
-                    : status === "absent"  ? "bg-slate-400 dark:bg-slate-600 text-white"
-                    : "bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200";
-                  return (
-                    <button key={key} onClick={() => handleKey(key)}
-                      className={`${isWide ? "px-2 text-[11px]" : "w-8"} h-10 rounded-lg font-semibold text-xs transition-all hover:opacity-80 active:scale-95 ${bgColor}`}>
-                      {key}
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
         </div>
       </div>
     </div>
   );
-};
+}
 
-export default WordGameWidget;
+const S = {
+  overlay:     {position:"fixed",inset:0,zIndex:50,display:"flex",alignItems:"center",justifyContent:"center",padding:16,background:"rgba(0,0,0,0.6)"},
+  modal:       {width:"100%",maxWidth:360,background:"#1a1a2e",border:"1px solid rgba(255,255,255,.1)",borderRadius:24,overflow:"hidden",boxShadow:"0 25px 60px rgba(0,0,0,0.5)"},
+  header:      {display:"flex",alignItems:"center",justifyContent:"space-between",padding:"20px 20px 16px",borderBottom:"1px solid rgba(255,255,255,.08)"},
+  title:       {fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:18,color:"#fff",margin:0},
+  sub:         {fontSize:11,color:"rgba(255,255,255,.35)",margin:"2px 0 0"},
+  closeBtn:    {background:"none",border:"none",color:"rgba(255,255,255,.4)",fontSize:18,cursor:"pointer",padding:4,lineHeight:1},
+  scores:      {display:"flex",alignItems:"center",justifyContent:"center",gap:16,padding:"16px 20px"},
+  scoreBox:    {display:"flex",flexDirection:"column",alignItems:"center",gap:4,padding:"12px 24px",borderRadius:14,background:"rgba(255,255,255,.04)",border:"2px solid transparent",transition:"all .2s",flex:1},
+  scoreActive: {border:"2px solid rgba(99,102,241,.5)",background:"rgba(99,102,241,.1)"},
+  scoreNum:    {fontFamily:"'Syne',sans-serif",fontWeight:900,fontSize:28,color:"#fff",lineHeight:1},
+  scoreLabel:  {fontSize:10,color:"rgba(255,255,255,.35)",textTransform:"uppercase",letterSpacing:".06em"},
+  vs:          {fontSize:12,fontWeight:700,color:"rgba(255,255,255,.2)",flexShrink:0},
+  status:      {textAlign:"center",padding:"0 20px 14px",fontSize:14,color:"rgba(255,255,255,.6)"},
+  board:       {display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,padding:"0 20px 20px"},
+  cell:        {aspectRatio:"1",borderRadius:14,background:"rgba(255,255,255,.06)",border:"1.5px solid rgba(255,255,255,.1)",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s"},
+  cellWin:     {background:"rgba(99,102,241,.2)",border:"1.5px solid rgba(99,102,241,.5)"},
+  actions:     {display:"flex",gap:8,padding:"0 20px 20px"},
+  resetBtn:    {flex:1,padding:"11px 0",borderRadius:12,background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.12)",color:"#fff",fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:13,cursor:"pointer"},
+  shareBtn:    {flex:1,padding:"11px 0",borderRadius:12,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",color:"#fff",fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:13,cursor:"pointer"},
+};
